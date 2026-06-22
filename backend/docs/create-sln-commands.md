@@ -26,3 +26,7 @@ Agregar referencias entre proyectos
 `dotnet add ./WalrusWallet.Application/ reference ./WalrusWallet.Domain/`
 
 `dotnet add ./WalrusWallet.Api/ reference ./WalrusWallet.Infrastructure/`
+
+Para configurar inyección de dependencias se instala el siguiente paquete:
+
+`dotnet add ./WalrusWallet.Application/ package Microsoft.Extensions.DependencyInjection.Abstractions`
