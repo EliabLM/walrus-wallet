@@ -1,8 +1,15 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using HealthChecks.UI.Client;
+using WalrusWallet.Infrastructure;
+using WalrusWallet.Domain.Common.Interfaces;
+using WalrusWallet.Api.Middleware;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddInfrastructure();
 
 var app = builder.Build();
 
@@ -13,29 +20,18 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseMiddleware<ErrorHandlingMiddleware>();
 
-var summaries = new[]
+app.MapHealthChecks("/health", new HealthCheckOptions
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+});
 
-app.MapGet("/weatherforecast", () =>
+app.MapGet("/version", (IAppInfoService appInfo) => Results.Ok(new
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    version = appInfo.Version,
+    environment = appInfo.Environment,
+    buildDate = appInfo.BuildDate
+}));
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
