@@ -2,7 +2,7 @@
 
 **Ubicación recomendada:** `docs/architecture/arquitectura-final.md`
 **Estado:** Visión de destino — no es un plan de inicio
-**Relacionado con:** `ADR-0001-Monolito-Modular-Fase1.md`, `WalrusWallet-Plan-Tecnico.md`
+**Relacionado con:** `ADR-0001-Monolito-Modular-Fase1.md`, `ADR-0002-Catalogo-Final-Microservicios-Microfrontends.md`, `WalrusWallet-Plan-Tecnico.md`
 
 ---
 
@@ -77,8 +77,9 @@ Internet
 NGINX (reverse proxy / TLS termination)
    │
    ├── React Host  ──────────────────────────────┐
+   │     │ vista Dashboard (compuesta en el Host,  │
+   │     │ no es un remoto)                        │
    │     │ Module Federation                      │
-   │     ├── Dashboard MFE                         │
    │     ├── Finance MFE                           │
    │     ├── Billing MFE                           │
    │     ├── Reports MFE                            │
@@ -89,13 +90,10 @@ NGINX (reverse proxy / TLS termination)
           │ (auth: valida JWT emitido por Keycloak)
           │
    ┌──────┴───────────────────────────────────────────────────┐
-   │                  Microservicios de dominio                 │
+   │            Microservicios de dominio (catálogo ADR-0002)   │
    │                                                              │
-   │  User · Identity · Audit · Company · Workspace · Membership │
-   │  Wallet · Account · Balance                                  │
-   │  Billing · Invoice · Payment · Transaction · Transfer · Bank │
-   │  Budget · Notification · Email · Push                        │
-   │  Reporting · Analytics · Dashboard(svc) · File · Scheduler    │
+   │  Identity · Company · Wallet · Payment · Bank · Billing      │
+   │  Scheduler · File · Notification · Reporting · Budget · Audit│
    └──────┬───────────────────────────────────────────────────┘
           │
           ├── síncrono: REST / gRPC (consultas, comandos directos)
@@ -117,64 +115,57 @@ NGINX (reverse proxy / TLS termination)
 
 ## 5. Catálogo de microservicios de dominio
 
-### 5.1 Servicios con fase de origen confirmada en el Plan Técnico
+> Esta sección queda **cerrada por `ADR-0002-Catalogo-Final-Microservicios-Microfrontends.md`**. Las versiones anteriores de este documento dejaban un grupo de servicios sin fase asignada (Audit, File, Bank, Budget, Scheduler) — ADR-0002 resolvió ese hueco consolidando aggregates que el Plan Técnico listaba como servicios sueltos.
 
-| Servicio | Fase de origen | Responsabilidad | Base de datos |
-|---|---|---|---|
-| **Identity** | Fase 2 — Identity | Integración OIDC con Keycloak, gestión de claims/roles/permissions | PostgreSQL |
-| **User** | Fase 2 — Identity | Perfil de usuario interno, vínculo con entidad de negocio | PostgreSQL |
-| **Company** | Fase 3 — Companies | Datos de la organización/tenant | PostgreSQL |
-| **Workspace** | Fase 3 — Companies | Espacios de trabajo dentro de una Company | PostgreSQL |
-| **Membership** | Fase 3 — Companies | Relación usuario ↔ Company/Workspace, multi-tenancy | PostgreSQL |
-| **Wallet** | Fase 4 — Wallet | Billetera del usuario, saldo agregado | PostgreSQL (ACID, optimistic concurrency) |
-| **Account** | Fase 4 — Wallet | Cuentas asociadas a una Wallet | PostgreSQL |
-| **Balance** | Fase 4 — Wallet | Cálculo y consistencia de saldo | PostgreSQL + Redis (cache de lectura) |
-| **Payment** | Fase 5 — Payments | Orquestación de pagos, idempotencia | PostgreSQL + outbox table |
-| **Transaction** | Fase 5 — Payments | Registro inmutable de movimientos | PostgreSQL |
-| **Transfer** | Fase 5 — Payments | Transferencias entre cuentas/usuarios | PostgreSQL |
-| **Notification** | Fase 6 — Notifications | Orquestación de notificaciones, plantillas | MongoDB |
-| **Email** | Fase 6 — Notifications | Envío de correo, proveedor externo | MongoDB (logs de envío) |
-| **Push** | Fase 6 — Notifications | Notificaciones push, SignalR | MongoDB (logs de envío) |
-| **Reporting** | Fase 7 — Reports | Read models de reportes financieros | MongoDB |
-| **Analytics** | Fase 7 — Reports | Agregaciones y métricas de negocio | MongoDB |
+| # | Microservicio | Aggregates/entidades internas | Fase de extracción | Base de datos |
+|---|---|---|---|---|
+| 1 | **Identity** | User + integración Keycloak (un solo bounded context) | Fase 2 | PostgreSQL |
+| 2 | **Company** | Company, Workspace, Membership | Fase 3 | PostgreSQL |
+| 3 | **Wallet** | Wallet, Account, Balance, Transaction (ledger), Transfer interno | Fase 4 | PostgreSQL (ACID, optimistic concurrency) |
+| 4 | **Payment** | Orquestación de pasarelas externas, idempotencia | Fase 5 | PostgreSQL + outbox |
+| 5 | **Bank** | Vinculación bancaria externa / open banking | Fase 5 | PostgreSQL |
+| 6 | **Billing** | Billing, Invoice | Fase 5 | PostgreSQL |
+| 7 | **Scheduler** | Jobs recurrentes (transferencias/facturas programadas) | Fase 5 | Redis (estado) + PostgreSQL (definición) |
+| 8 | **File** | Recibos, comprobantes, exportes | Fase 5 | Object storage + MongoDB (metadata) |
+| 9 | **Notification** | Notification, canal Email, canal Push | Fase 6 | MongoDB |
+| 10 | **Reporting** | Reporting, Analytics | Fase 7 | MongoDB |
+| 11 | **Budget** | Presupuestos y metas definidos por el usuario | Fase 7 | PostgreSQL |
+| 12 | **Audit** | Consumidor cross-cutting de eventos de todos los dominios, trail de cumplimiento | Fase 7 | MongoDB |
 
-### 5.2 Servicios mencionados en las instrucciones del proyecto sin fase de origen todavía
+`Dashboard` no es un microservicio: la vista de inicio la compone el Host del frontend agregando Wallet + Reporting + Notification a través del API Gateway, sin un backend propio.
 
-Las instrucciones del proyecto (sección 3, arquitectura final) listan también **Audit, File, Bank, Budget y Scheduler** como microservicios de dominio. Al cruzarlos con el Plan Técnico:
-
-| Servicio | Aparece en instrucciones (visión final) | Aparece en Plan Técnico (fase concreta) | Estado |
-|---|---|---|---|
-| **Audit** | Sí | No — hoy es la entidad `AuditEvent` dentro del módulo Identity (ADR-0001, Fase 1) | Pendiente: decidir en qué fase se extrae como servicio propio |
-| **File** | Sí | No aparece en ninguna fase 1-12 | Pendiente: no tiene fase asignada |
-| **Bank** | Sí | No aparece como servicio propio; lo más cercano es la integración bancaria implícita en Payments (Fase 5) | Pendiente: aclarar si es un servicio propio o parte de Payment |
-| **Budget** | Sí | No aparece en ninguna fase 1-12 | Pendiente: no tiene fase asignada |
-| **Scheduler** | Sí | No aparece en ninguna fase 1-12 | Pendiente: no tiene fase asignada |
-
-> **Nota de coherencia:** este documento no resuelve estos huecos por sí mismo — eso sería anticipar decisiones de fase, justo lo que ADR-0001 busca evitar. Se deja registrado aquí para que, al llegar a la fase donde cada uno tendría sentido (probablemente Fase 4 o 5 para Bank, y una fase nueva o ampliación de Fase 7 para Budget/Scheduler/File), se revise explícitamente — con el mismo patrón que ya usa ADR-0001 en su sección "Pendiente para revisión futura" sobre Identity Service/User Service en Fase 2.
-
-### 5.3 Servicios de plataforma (no son dominio de negocio)
+### 5.1 Servicios de plataforma (no son dominio de negocio)
 
 | Servicio | Responsabilidad |
 |---|---|
 | **API Gateway** | Punto único de entrada, enrutamiento, rate limiting, agregación de respuestas |
-| **Dashboard (servicio de agregación)** | Compone datos de Reporting/Analytics/Wallet para la vista de inicio; no tiene base de datos propia, solo agrega |
+
+### 5.2 Decisiones de diseño abiertas a ajuste
+
+ADR-0002 marca tres puntos como juicio de diseño, no como verdad cerrada para siempre:
+
+- **Bank vs. Payment:** se mantienen separados porque son compliance/proveedores distintos (agregación bancaria vs. rieles de pago). Si en Fase 5 se confirma que siempre cambian juntos, se fusionan con un ADR de supplement.
+- **Scheduler como microservicio propio:** elegido para practicar scheduling distribuido (locks con Redis); es razonable degradarlo a librería embebida en Payment/Billing si resulta sobre-dimensionado.
+- **Audit y Budget en Fase 7:** agrupados junto a Reporting porque comparten el mismo patrón arquitectónico (consumidor de eventos → read model propio), aunque su dominio de negocio sea distinto entre sí.
 
 ---
 
 ## 6. Microfrontends (Module Federation)
 
-División por dominio de negocio, no por página, según el principio del proyecto:
+División por dominio de negocio, no por página, según el principio del proyecto. Catálogo cerrado por ADR-0002: **Host + 4 remotos** (no 5 — la vista Dashboard vive en el Host, no es un remoto separado):
 
 ```text
 React Host (shell)
- ├── Dashboard      → agrega Wallet, Payment, Notification (resumen)
- ├── Finance        → consume Wallet, Account, Balance
- ├── Billing        → consume Billing, Invoice, Payment, Transaction, Transfer
- ├── Reports        → consume Reporting, Analytics
- └── Administration → consume User, Identity, Company, Workspace, Membership
+ │  └── vista Dashboard: agrega Wallet, Reporting y Notification vía Gateway
+ │      (composición en el Host, NO es un remoto de Module Federation)
+ │
+ ├── Finance        → consume Wallet, Bank, Scheduler
+ ├── Billing        → consume Billing, Payment, File
+ ├── Reports        → consume Reporting, Analytics, Budget
+ └── Administration → consume Identity, Company, Audit (vista solo-admin), preferencias de Notification
 ```
 
-Cada microfrontend es un proyecto React independiente, con su propio pipeline de build y despliegue, expuesto como remoto de Module Federation y consumido por el Host.
+Cada microfrontend es un proyecto React independiente, con su propio pipeline de build y despliegue, expuesto como remoto de Module Federation y consumido por el Host. No hay relación 1:1 entre microfrontends y microservicios: cada MFE consume los servicios que el usuario necesita ver, no una partición espejo del backend.
 
 **Regla de corte:** un microfrontend se separa cuando el microservicio (o grupo de microservicios) de dominio que representa ya fue extraído del backend. El frontend nunca se fragmenta por delante del backend — así lo establece ADR-0001 para Fase 1, y el mismo criterio aplica en cada extracción posterior.
 
@@ -229,9 +220,10 @@ Siguiendo el criterio de bases de datos del proyecto:
 
 | Tipo de dato | Motor | Servicios típicos |
 |---|---|---|
-| Transaccional (usuarios, pagos, facturas, cuentas, movimientos) | **PostgreSQL** | Identity, User, Company, Wallet, Account, Balance, Payment, Transaction, Transfer, Billing, Invoice |
-| Documental (auditoría, logs de negocio, reportes, snapshots) | **MongoDB** | Audit, Notification, Email, Push, Reporting, Analytics |
-| Cache / sesiones / locks distribuidos / idempotencia / pub-sub | **Redis** | Transversal a todos los servicios (no es una base "de un servicio", es infraestructura compartida de soporte) |
+| Transaccional (usuarios, pagos, facturas, cuentas, movimientos) | **PostgreSQL** | Identity, Company, Wallet, Payment, Bank, Billing, Budget |
+| Documental (auditoría, logs de negocio, reportes, snapshots) | **MongoDB** | Notification, Reporting, Audit |
+| Cache / sesiones / locks distribuidos / idempotencia / pub-sub | **Redis** | Transversal a todos los servicios; uso dedicado en Scheduler (estado de jobs) |
+| Almacenamiento de objetos (no es uno de los tres motores anteriores) | **Object storage** (ej. S3-compatible) + MongoDB para metadata | File |
 
 **Regla de oro:** *database per service*. Ningún microservicio accede directamente a la base de datos de otro; toda comunicación entre dominios pasa por API (síncrona) o eventos (asíncrona).
 
@@ -263,12 +255,17 @@ Usuario → React Host → Keycloak (login) → JWT
 Namespace: walruswallet-prod
  ├── Deployment: api-gateway          (HPA, readiness/liveness probes)
  ├── Deployment: identity-svc
- ├── Deployment: user-svc
  ├── Deployment: company-svc
  ├── Deployment: wallet-svc
  ├── Deployment: payment-svc
+ ├── Deployment: bank-svc
+ ├── Deployment: billing-svc
+ ├── Deployment: scheduler-svc
+ ├── Deployment: file-svc
  ├── Deployment: notification-svc
  ├── Deployment: reporting-svc
+ ├── Deployment: budget-svc
+ ├── Deployment: audit-svc
  ├── Deployment: react-host
  ├── Deployment: finance-mfe
  ├── Deployment: billing-mfe
@@ -373,19 +370,19 @@ La razón se mantiene igual que en Fase 1: no se asume complejidad operacional (
 | Fase del Plan Técnico | Qué aporta a esta arquitectura final |
 |---|---|
 | Fase 1 — Foundation | Monolito modular, SPA única, Docker Compose base — el punto de partida de todo lo anterior |
-| Fase 2 — Identity | Primeros candidatos a extracción: Identity, User |
-| Fase 3 — Companies | Multi-tenancy: Company, Workspace, Membership |
-| Fase 4 — Wallet | Núcleo transaccional: Wallet, Account, Balance |
-| Fase 5 — Payments | Introduce CQRS, Outbox/Inbox, primer uso real de RabbitMQ con lógica de negocio |
-| Fase 6 — Notifications | Mensajería asíncrona orientada a consumidores externos (email/push) |
-| Fase 7 — Reports | Read models, agregaciones — primer caso fuerte de MongoDB como almacén de lectura |
+| Fase 2 — Identity | Primer candidato a extracción: Identity (User fusionado en el mismo bounded context) |
+| Fase 3 — Companies | Multi-tenancy: Company (Workspace y Membership como aggregates internos) |
+| Fase 4 — Wallet | Núcleo transaccional: Wallet (Account, Balance, Transaction y Transfer interno como aggregates internos) |
+| Fase 5 — Payments & Billing | Introduce CQRS, Outbox/Inbox, primer uso real de RabbitMQ con lógica de negocio. Extrae Payment, Bank, Billing, Scheduler y File (ver ADR-0002) |
+| Fase 6 — Notifications | Mensajería asíncrona orientada a consumidores externos: Notification (Email y Push como canales internos) |
+| Fase 7 — Reports | Read models, agregaciones — primer caso fuerte de MongoDB como almacén de lectura. Extrae Reporting, Budget y Audit (mismo patrón: consumidor de eventos → read model propio, ver ADR-0002) |
 | Fase 8 — API Gateway | Punto único de entrada — condición previa para multiplicar microservicios sin caos |
 | Fase 9 — Observabilidad | OpenTelemetry, Prometheus, Grafana, Loki, Jaeger |
 | Fase 10 — Kubernetes | Orquestación real de todo lo anterior |
 | Fase 11 — DevOps | Pipelines por servicio, registry, rollback |
 | Fase 12 — Producción | Hardening, backups, monitoreo continuo |
 
-La extracción de microfrontends (Module Federation) no tiene una fase numerada propia en el Plan Técnico — ADR-0001 establece que ocurre "cuando se extraiga el primer microservicio real". Eso sitúa el primer corte de frontend probablemente entre Fase 2 y Fase 4, dependiendo de cuál dominio se extraiga primero (ver la sección "Pendiente para revisión futura" de ADR-0001).
+La extracción de microfrontends (Module Federation) no tiene una fase numerada propia en el Plan Técnico — ADR-0001 establece que ocurre "cuando se extraiga el primer microservicio real". Eso sitúa el primer corte de frontend probablemente entre Fase 2 y Fase 4, dependiendo de cuál dominio se extraiga primero — esa pregunta sigue abierta y se decide al llegar a Fase 2 (ver "Pendiente para revisión futura" en ADR-0001 y en ADR-0002).
 
 ---
 
@@ -405,5 +402,5 @@ La extracción de microfrontends (Module Federation) no tiene una fase numerada 
 ## 19. Cómo mantener este documento vivo
 
 - Este documento **no se reescribe completo** cada vez que cambia un detalle: se actualiza la sección puntual afectada, igual que el resto de documentos del proyecto.
-- Cuando una fase resuelva uno de los "pendientes" de la sección 5.2 (Audit, File, Bank, Budget, Scheduler), esa fase debe generar su propio ADR de extracción, y este documento se actualiza para mover el servicio de la tabla 5.2 a la tabla 5.1 con su fase de origen real.
-- Si en algún punto la arquitectura real construida se desvía de lo descrito aquí (por ejemplo, se decide fusionar dos servicios que aquí aparecen separados), el ADR de esa decisión tiene prioridad y este documento se ajusta para reflejarlo — nunca al revés.
+- El catálogo de microservicios y microfrontends (secciones 5 y 6) está **cerrado por ADR-0002**. Si en la práctica de una fase se confirma que dos servicios del catálogo deben fusionarse o que uno debe partirse, esa decisión se registra con un ADR de supplement (ej. `ADR-0003`) — no editando ADR-0002 ni esta sección directamente.
+- Si en algún punto la arquitectura real construida se desvía de lo descrito aquí, el ADR de esa decisión tiene prioridad y este documento se ajusta para reflejarlo — nunca al revés.
