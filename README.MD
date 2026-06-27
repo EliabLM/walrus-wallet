@@ -86,7 +86,7 @@ Detalle completo en [`docs/architecture/`](docs/architecture/) y en la especific
 | **Bases de datos**  | PostgreSQL (transaccional) · MongoDB (documental/auditoría) · Redis (cache, idempotencia)      |
 | **Mensajería**      | RabbitMQ                                                                                       |
 | **Infraestructura** | Docker, Docker Compose, NGINX                                                                  |
-| **Testing**         | xUnit, FluentAssertions, Testcontainers, Vitest, React Testing Library, Playwright             |
+| **Testing**         | xUnit, Shouldly, Testcontainers, Vitest, React Testing Library, Playwright                     |
 | **CI/CD**           | GitHub Actions                                                                                 |
 | **Despliegue**      | VPS económico → k3s/Kubernetes cuando la base sea estable                                      |
 
@@ -179,6 +179,7 @@ Detalle completo en [`docs/roadmap/WalrusWallet-Plan-Tecnico.md`](docs/roadmap/W
 | [`docs/architecture/vision.md`](docs/architecture/vision.md)                                 | Qué es WalrusWallet y qué problema resuelve                           |
 | [`docs/architecture/`](docs/architecture/)                                                   | Arquitectura de Fase 1 y arquitectura final de destino                |
 | [`docs/adr/ADR-0001-Monolito-Modular-Fase1.md`](docs/adr/ADR-0001-Monolito-Modular-Fase1.md) | Por qué Fase 1 es monolito modular y no microservicios desde el día 1 |
+| [`docs/adr/ADR-0003-Solo-Dependencias-Open-Source.md`](docs/adr/ADR-0003-Solo-Dependencias-Open-Source.md) | Restricción de solo dependencias open source (sin librerías comerciales) |
 | [`docs/roadmap/WalrusWallet-Plan-Tecnico.md`](docs/roadmap/WalrusWallet-Plan-Tecnico.md)     | Las 12 fases del Plan Técnico                                         |
 
 ---
