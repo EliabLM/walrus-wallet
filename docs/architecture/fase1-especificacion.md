@@ -371,7 +371,7 @@ No debe ser una dependencia central de la fase 1.
 ### Herramientas recomendadas
 
 - xUnit
-- FluentAssertions
+- Shouldly
 - Testcontainers
 - Vitest
 - React Testing Library
