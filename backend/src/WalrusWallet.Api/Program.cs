@@ -1,8 +1,9 @@
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using HealthChecks.UI.Client;
-using WalrusWallet.Infrastructure;
-using WalrusWallet.Domain.Common.Interfaces;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using WalrusWallet.Api.Middleware;
+using WalrusWallet.Api.Options;
+using WalrusWallet.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure();
+builder.Services.Configure<AppInfoOptions>(builder.Configuration.GetSection("AppInfo"));
 
 var app = builder.Build();
 
@@ -27,11 +29,12 @@ app.MapHealthChecks("/health", new HealthCheckOptions
     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
 });
 
-app.MapGet("/version", (IAppInfoService appInfo) => Results.Ok(new
+app.MapGet("/version", (IOptions<AppInfoOptions> appInfo, IHostEnvironment env) => Results.Ok(new
 {
-    version = appInfo.Version,
-    environment = appInfo.Environment,
-    buildDate = appInfo.BuildDate
+    version = appInfo.Value.Version,
+    commitHash = appInfo.Value.CommitHash,
+    buildDate = appInfo.Value.BuildDate,
+    environment = env.EnvironmentName
 }));
 
 app.Run();
